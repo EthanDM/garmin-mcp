@@ -1,4 +1,5 @@
 """Test-only repository view for private fixtures inside the verifier worktree."""
+
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
@@ -19,5 +20,8 @@ def synthetic_repository_ancestry(fixture):
             return False
         return original_exists(path, *args, **kwargs)
 
-    with patch("garmin_session.PROJECT_ROOT", Path("/synthetic-unrelated-project")), patch.object(Path, "exists", exists):
+    with (
+        patch("garmin_session.PROJECT_ROOT", Path("/synthetic-unrelated-project")),
+        patch.object(Path, "exists", exists),
+    ):
         yield

@@ -4,6 +4,7 @@ Endpoint constants are internal. Auth is a separate operator CLI. Project only
 necessary activity fields before crossing into TypeScript; never emit raw GPS,
 account objects, dependency errors, or library logs.
 """
+
 import datetime
 import json
 import math
@@ -13,7 +14,18 @@ import sys
 from garmin_session import SafeError, locked_store, load_client, persist, quiet_library
 
 LIST_ENDPOINT = "/activitylist-service/activities/search/activities"
-METRICS = ("distance", "duration", "movingDuration", "elapsedDuration", "calories", "bmrCalories", "averageHR", "maxHR", "elevationGain", "elevationLoss")
+METRICS = (
+    "distance",
+    "duration",
+    "movingDuration",
+    "elapsedDuration",
+    "calories",
+    "bmrCalories",
+    "averageHR",
+    "maxHR",
+    "elevationGain",
+    "elevationLoss",
+)
 
 
 def validate_request(request):
@@ -24,12 +36,24 @@ def validate_request(request):
     if operation not in ("list", "get") or not isinstance(args, dict):
         raise SafeError("invalid_input")
     if operation == "get":
-        if set(args) != {"activityId"} or not isinstance(args["activityId"], str) or not re.fullmatch(r"[1-9][0-9]{0,29}", args["activityId"]):
+        if (
+            set(args) != {"activityId"}
+            or not isinstance(args["activityId"], str)
+            or not re.fullmatch(r"[1-9][0-9]{0,29}", args["activityId"])
+        ):
             raise SafeError("invalid_input")
     else:
-        if not set(args).issubset({"limit", "offset", "startDate", "endDate"}) or not {"limit", "offset"}.issubset(args):
+        if not set(args).issubset({"limit", "offset", "startDate", "endDate"}) or not {
+            "limit",
+            "offset",
+        }.issubset(args):
             raise SafeError("invalid_input")
-        if type(args["limit"]) is not int or not 1 <= args["limit"] <= 50 or type(args["offset"]) is not int or not 0 <= args["offset"] <= 10000:
+        if (
+            type(args["limit"]) is not int
+            or not 1 <= args["limit"] <= 50
+            or type(args["offset"]) is not int
+            or not 0 <= args["offset"] <= 10000
+        ):
             raise SafeError("invalid_input")
         if ("startDate" in args) != ("endDate" in args):
             raise SafeError("invalid_input")
@@ -37,7 +61,9 @@ def validate_request(request):
             try:
                 dates = []
                 for key in ("startDate", "endDate"):
-                    if not isinstance(args[key], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args[key]):
+                    if not isinstance(args[key], str) or not re.fullmatch(
+                        r"\d{4}-\d{2}-\d{2}", args[key]
+                    ):
                         raise ValueError()
                     dates.append(datetime.date.fromisoformat(args[key]))
                 delta = (dates[1] - dates[0]).days
@@ -67,13 +93,22 @@ def project_activity(raw):
         raise SafeError("bridge_protocol")
     sport = raw.get("activityTypeDTO", raw.get("activityType"))
     sport = sport.get("typeKey") if isinstance(sport, dict) else None
-    result = {"activityId": identity, "activityName": safe_text(raw.get("activityName"), 500), "activityType": safe_text(sport, 100)}
+    result = {
+        "activityId": identity,
+        "activityName": safe_text(raw.get("activityName"), 500),
+        "activityType": safe_text(sport, 100),
+    }
     for key in ("startTimeLocal", "startTimeGMT"):
         result[key] = safe_text(summary.get(key), 40)
     for key in METRICS:
         value = summary.get(key)
         # Invalid numbers retain inconsistency information without echoing arbitrary text.
-        result[key] = value if type(value) in (int, float) and math.isfinite(value) else None if value is None else "invalid"
+        if type(value) in (int, float) and math.isfinite(value):
+            result[key] = value
+        elif value is None:
+            result[key] = None
+        else:
+            result[key] = "invalid"
     return result
 
 
@@ -82,7 +117,12 @@ def execute(request, store, client_loader=load_client):
     operation, args = validate_request(request)
     with locked_store(store) as root, quiet_library():
         garmin = client_loader(root)
-        from garminconnect import GarminConnectAuthenticationError, GarminConnectTooManyRequestsError, GarminConnectNotFoundError
+        from garminconnect import (
+            GarminConnectAuthenticationError,
+            GarminConnectTooManyRequestsError,
+            GarminConnectNotFoundError,
+        )
+
         try:
             if operation == "list":
                 params = {"start": str(args["offset"]), "limit": str(args["limit"])}
@@ -129,7 +169,9 @@ def main():
         response = {"ok": False, "code": error.code}
     except Exception:
         response = {"ok": False, "code": "request_failed"}
-    sys.stdout.write(json.dumps(response, allow_nan=False, separators=(",", ":")) + "\n")
+    sys.stdout.write(
+        json.dumps(response, allow_nan=False, separators=(",", ":")) + "\n"
+    )
 
 
 if __name__ == "__main__":

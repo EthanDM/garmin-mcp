@@ -16,9 +16,9 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
-    "format": "prettier . --write",
-    "format:check": "prettier . --check",
-    "lint": "eslint . --max-warnings=0",
+    "format": "prettier . --write && npm run format:python",
+    "format:check": "prettier . --check && npm run format:python:check",
+    "lint": "eslint . --max-warnings=0 && npm run lint:python",
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "test": "vitest run && npm run test:python",
     "test:python": "node --import tsx scripts/python-tests.ts",
@@ -26,7 +26,10 @@
     "smoke": "tsx src/smoke.ts",
     "auth:login": "tsx src/auth/cli.ts login",
     "auth:status": "tsx src/auth/cli.ts status",
-    "auth:logout": "tsx src/auth/cli.ts logout"
+    "auth:logout": "tsx src/auth/cli.ts logout",
+    "format:python": "node --import tsx scripts/python-quality.ts format",
+    "format:python:check": "node --import tsx scripts/python-quality.ts format-check",
+    "lint:python": "node --import tsx scripts/python-quality.ts lint"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
