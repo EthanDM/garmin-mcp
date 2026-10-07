@@ -3,6 +3,7 @@
 Only operator login may create the store. Reads never attempt credential login.
 Pinned native Client APIs own load/dump/refresh; no competing auth protocol.
 """
+
 import contextlib
 import fcntl
 import json
@@ -20,6 +21,7 @@ PROJECT_ROOT = Path(__file__).absolute().parent.parent
 
 class SafeError(Exception):
     """Locally authored error code; never holds raw library diagnostics."""
+
     def __init__(self, code):
         self.code = code
         super().__init__(code)
@@ -61,19 +63,31 @@ def validate_ancestry(root):
         trusted_sticky = info.st_uid == 0 and info.st_mode & stat.S_ISVTX
         if writable and not trusted_sticky:
             raise SafeError("unsafe_store")
-        if node == root and (info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700):
+        if node == root and (
+            info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700
+        ):
             raise SafeError("unsafe_store")
 
 
 def private_file(path, missing_ok=False):
-    """Check regular, single-link, user-owned 0600 files before any content read."""
+    """Validate a bounded private file before callers read its contents.
+
+    Return False only for an absent file when missing_ok is set. Unsafe existing
+    files always raise unsafe_store; a required absent file raises auth_required.
+    """
     try:
         info = path.lstat()
     except FileNotFoundError:
         if missing_ok:
             return False
         raise SafeError("auth_required") from None
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1 or info.st_size > 65536:
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_uid != os.getuid()
+        or stat.S_IMODE(info.st_mode) != 0o600
+        or info.st_nlink != 1
+        or info.st_size > 65536
+    ):
         raise SafeError("unsafe_store")
     return True
 
@@ -84,6 +98,8 @@ def locked_store(value, create=False, timeout=5):
 
     A marker prevents accidental use of another application's token directory.
     Unknown contents are rejected without reading them. No lock-file deletion race.
+    Creation is reserved for operator login; all callers release the lock on exit,
+    including errors. Contention beyond timeout seconds raises store_busy.
     """
     root = Path(value)
     validate_ancestry(root)
@@ -109,10 +125,15 @@ def locked_store(value, create=False, timeout=5):
         marker = root / MARKER_NAME
         entries = set(os.listdir(root))
         if not entries and create:
-            marker_fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            marker_fd = os.open(
+                marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
+            )
             with os.fdopen(marker_fd, "wb") as handle:
                 handle.write(MARKER)
-        elif not entries.issubset({MARKER_NAME, TOKEN_NAME}) or MARKER_NAME not in entries:
+        elif (
+            not entries.issubset({MARKER_NAME, TOKEN_NAME})
+            or MARKER_NAME not in entries
+        ):
             raise SafeError("unsafe_store")
         private_file(marker)
         if marker.read_bytes() != MARKER:
@@ -128,11 +149,16 @@ def persist(client, root):
     """Explicitly verify persistence because pinned login/refresh suppress dump failures."""
     try:
         # Only DI tokens have a resumable on-disk representation in 0.3.17.
-        if not client.di_token or not client.di_refresh_token or not client.di_client_id:
+        if (
+            not client.di_token
+            or not client.di_refresh_token
+            or not client.di_client_id
+        ):
             raise SafeError("persistence_failed")
         client.dump(str(root))
         private_file(root / TOKEN_NAME)
         from garminconnect.client import Client
+
         saved = Client()
         saved.load(str(root))
         if json.loads(saved.dumps()) != json.loads(client.dumps()):
@@ -142,8 +168,13 @@ def persist(client, root):
 
 
 def load_client(root):
-    """Restore without profile requests or interactive login; refresh with the native flow."""
+    """Return a restored Garmin client without profile reads or credential login.
+
+    Refresh an expiring DI session through the pinned native client and verify
+    its saved state. Missing, invalid or unrefreshable sessions raise auth_required.
+    """
     from garminconnect import Garmin
+
     private_file(root / TOKEN_NAME)
     garmin = Garmin(retry_attempts=0)
     try:

@@ -10,6 +10,7 @@ Node.js 22+, npm, Python 3.12+ (tested dependency setup uses Python 3.14), and a
 npm ci
 python3.14 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements-dev.txt
 npm run check
 npm run auth:login
 npm run auth:status
@@ -73,6 +74,8 @@ Errors expose fixed codes such as `auth_required`, `unsafe_store`, `store_busy`,
 ```sh
 npm run check
 ```
+
+Contributor checks require `.venv/bin/python -m pip install -r requirements-dev.txt`; Ruff is pinned there as a development-only dependency. `npm run format` formats TypeScript/documentation with Prettier and Python source/tests with Ruff. `format:check` and `lint` include Python checks.
 
 `check` runs formatting, lint, strict TypeScript checking, build, then all TypeScript and Python behavior tests. Build precedes tests so protocol tests exercise both source and built entries from an unrelated cwd. The Python runner uses the configured interpreter and Node’s `--import tsx` loader, avoiding CLI IPC sockets under long temporary paths. Fixtures honor `TMPDIR`. When Factory places temporary files inside the checkout, Python tests mock only repository ancestry outside each synthetic fixture; real repository-marker rejection is still tested and production checks remain unchanged. Tests use synthetic private stores and mocked HTTP, including the actual pinned client's load/dump/refresh and 401 retry. They never use operator credentials, production tracker data or internet. Venv/cache/verification-temp directories are excluded from formatting and lint.
 
