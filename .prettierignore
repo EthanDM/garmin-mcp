@@ -1,0 +1,10 @@
+dist
+node_modules
+.venv
+__pycache__
+.verification-temp
+package-lock.json
+venv
+.pytest_cache
+coverage
+.factory
